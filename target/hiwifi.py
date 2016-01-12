@@ -5,11 +5,13 @@ import paramiko
 from common import *
 
 
-def hiwifi(nodes, **kwargs):
+def hiwifi(nodes, config_section=None, **kwargs):
     '''kwargs: hostname, username, password, port, config_path'''
 
-    get_from_config_if_none(
-        ['hostname', 'username', 'password', 'port', 'config_path'])
+    if config_section is None:
+        config_section = 'hiwifi'
+    kwargs = kwargs or get_config(config_section)
+
     kwargs['port'] = int(kwargs['port'])
 
     log.info('ssh {u}@{h} -p {p}'.format(

@@ -3,7 +3,6 @@
 import os.path
 import time
 import datetime
-import inspect
 import pyping
 import logging as log
 
@@ -71,29 +70,47 @@ class Node(object):
             return (1 + self.pr.lr() * 20)**2 \
                 * (self.pr.min() * 0.2 + self.pr.avg() * 0.8)
 
-    def test_result(self):
+    def test_result(self, short=True, score=True):
+        def fix(text=''):
+            if score:
+                s = self.score()
+                if s is None:
+                    s = ''
+                else:
+                    s = '={:.1f}'.format(s)
+                text += s
+            if short and text:
+                return '{}: {}'.format(self.short, text)
+            elif short and not text:
+                return self.short
+            else:
+                return text
+
         if self.pr.rtts():
-            return '{}: {:.1%}/{:.0f}/{:.0f}/{:.0f}={:.1f}'.format(
-                self.short,
+            return fix('{:.1%}/{:.0f}/{:.0f}/{:.0f}'.format(
                 self.pr.lr(),
                 self.pr.min(),
                 self.pr.avg(),
-                self.pr.max(),
-                self.score())
+                self.pr.max()))
         elif self.ip and not self.pr:
-            return self.short
+            return fix()
         else:
-            return '{}: FAILED'.format(self.short)
+            return fix('FAILED')
 
 
 class Nodes(list):
-    def __init__(self):
-        super(Nodes, self).__init__()
+    def __init__(self, *args, **kwargs):
+        super(Nodes, self).__init__(*args, **kwargs)
 
-    def test(self, auto_sort=True, **kwargs):
+    def __add__(self, y):
+        return Nodes(super(Nodes, self).__add__(y))
+
+    def test(self, config_section=None, auto_sort=True, **kwargs):
         '''kwargs: option, value'''
 
-        get_from_config_if_none(['option', 'value'], section='ping')
+        if config_section is None:
+            config_section = 'ping'
+        kwargs = kwargs or get_config(config_section)
 
         kwargs['option'] = kwargs['option'].lower()
         kwargs['value'] = int(kwargs['value'])
@@ -137,9 +154,16 @@ class Nodes(list):
                     last_round = list()
                     for node in self:
                         last_round.append(node.ping())
+
                     if set(last_round) == {None}:
-                        for node in self:
+                        failing = True
+                        for node in reversed(self):
                             del node.pr[-1]
+                            if failing and node.pr:
+                                if node.pr[-1] is None:
+                                    del node.pr[-1]
+                                else:
+                                    failing = False
                         log.warning(
                             'Failed to ping ({}), retrying...'.format(doing))
                         time.sleep(1)
@@ -206,20 +230,8 @@ class PingResult(list):
             return float(len([r for r in self if r is None])) / len(self)
 
 
-def get_from_config_if_none(args, section=None):
-    '''This should be called at first in a function/method!!'''
-
-    f = inspect.stack()[1][0]
-    f_name = inspect.stack()[1][3]
-    f_locals = f.f_locals
-
-    if section is None:
-        section = f_name
-
-    for v in f_locals.values():
-        if not isinstance(v, dict):
-            continue
-        for arg in args:
-            if v.get(arg) is None:
-                v[arg] = config.get(section, arg)
-        break
+def get_config(section):
+    r = dict()
+    for k, v in config.items(section):
+        r[k] = v
+    return r
