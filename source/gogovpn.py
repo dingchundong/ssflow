@@ -5,10 +5,12 @@ import requests
 from common import *
 
 
-def gogovpn(**kwargs):
+def gogovpn(config_section=None, **kwargs):
     '''kwargs: service, email, password'''
 
-    get_from_config_if_none(['service', 'email', 'password'])
+    if config_section is None:
+        config_section = 'gogovpn'
+    kwargs = kwargs or get_config(config_section)
 
     base = 'http://www.gogovpn.org/{}/user'.format(kwargs['service'])
     url = dict(

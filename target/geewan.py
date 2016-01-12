@@ -5,12 +5,15 @@ import requests
 from common import *
 
 
-def geewan(nodes, **kwargs):
+def geewan(nodes, config_section=None, **kwargs):
     '''kwargs: hostname, password, timeout'''
     '''Warning: All old ss nodes in the router will be deleted'''
     '''警告: 部署时将删除路由器中所有旧SS节点'''
 
-    get_from_config_if_none(['hostname', 'password', 'timeout'])
+    if config_section is None:
+        config_section = 'geewan'
+    kwargs = kwargs or get_config(config_section)
+
     kwargs['timeout'] = int(kwargs['timeout'])
 
     def url(interface):
