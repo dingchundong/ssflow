@@ -22,13 +22,16 @@
 
 ## 如何开始
 
-1. 安装 Python 2.7.x，并安装所需的 Python 依赖库 `requests`, `pyping`, `paramiko`
+1. 安装 Python 2.7.x，并安装所需的 Python 依赖库 `requests`, `pyping`
 
 	可以使用 pip 快速安装依赖库
 
-		pip install requests, pyping, paramiko
+		pip install requests, pyping
 
-	`paramiko` 用于 SSH 操作(部署到极路由)，如不用则不必安装
+	以及其他可选的依赖库
+	
+	* `paramiko` 用于 SSH 操作(部署到极路由)
+	* `tabulate` 用于以纯文本表格的方式输出节点信息
 
 2. 通过复制 `deploy.config.example` 来创建并编辑自己的配置 `deploy.config`，内有具体说明
 
