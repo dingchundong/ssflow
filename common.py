@@ -1,15 +1,23 @@
 # coding: utf8
 
-import os.path
+import sys
+import re
+import os
+import ctypes
 import time
 import datetime
-import pyping
+import threading
 import logging as log
+
+import pyping
+import requests
+from tabulate import tabulate
 
 from socket import gethostbyname
 from ConfigParser import ConfigParser
 
-CONFIG_FILE = 'deploy.config'
+CONFIG_FILE = 'ssnd.config'
+TLD_LIST_FILE = 'tld_list.txt'
 
 if not os.path.isfile(CONFIG_FILE):
     raise Exception('Config file not found: {}'.format(CONFIG_FILE))
@@ -17,85 +25,147 @@ if not os.path.isfile(CONFIG_FILE):
 config = ConfigParser()
 config.read(CONFIG_FILE)
 
+with open(TLD_LIST_FILE, 'r') as fp:
+    TLD_LIST = fp.readlines()
+TLD_LIST = map(lambda x: x.strip(), TLD_LIST)
+TLD_LIST = [x.lower() for x in TLD_LIST if x and x[0] != '#']
+
 log.basicConfig(level=log.INFO, format='%(levelname)s: %(message)s')
 
-udp = False
-try:
-    pyping.Ping('localhost', udp=udp).do()
-except:
-    udp = not udp
-
-if udp:
-    log.info('No root access, will ping in UDP mode')
+if sys.platform.startswith('win32'):
+    run_as_root = ctypes.windll.shell32.IsUserAnAdmin() != 0
+    default_timer = time.clock
 else:
+    run_as_root = os.getuid() == 0
+    default_timer = time.time
+
+if run_as_root:
     log.info('Got root access, will ping in ICMP mode')
+else:
+    log.info('No root access, will ping in UDP mode')
+
+
+class ConfigBased(object):
+    def __init__(
+            self,
+            section=None, ints=[], floats=[], bools=[],
+            **config):
+
+        if section is None and config:
+            self.config = config
+        else:
+            if section is None:
+                section = self.__class__.__name__.lower()
+            self.config = get_config(section, ints, floats, bools)
 
 
 class Node(object):
+    count = 0
 
-    def __init__(self, host, port, password, method):
+    def __init__(self, host, port, password, method, name=None):
+        Node.count += 1
+        self.ping_own_id = id(Node) + Node.count & 0xFFFF
+
         self.host = host
         self.port = int(port)
         self.password = password
         self.method = method
 
-        s = host.split('.', 2)
-        i = 1 if s[0].lower() == 'www' else 0
-        self.short = s[i].upper()
+        self._ip = None
+        host_is_ip = False
 
-        self.pr = PingResult()
-        self.get_ip()
+        if re.match(r'(\d+\.){3}\d+', host):
+            self._ip = host
+            host_is_ip = True
 
-    def get_ip(self):
-        try:
-            self.ip = gethostbyname(self.host)
-        except Exception:
-            log.warning('Failed to resolve domain name: {}'.format(self.host))
-            self.ip = None
+        if name is not None:
+            self.name = name
+        elif host_is_ip:
+            self.name = host
         else:
-            log.info('{host} => {ip}'.format(host=self.host, ip=self.ip))
-            return self.ip
+            name = self.host.lower()
+            for i in xrange(2):
+                for x in TLD_LIST:
+                    x = '.' + x
+                    if name.endswith(x):
+                        name = name[:-len(x)]
+                        last_match = x
 
-    def ip_or_host(self):
-        return self.ip or self.host
+            if name == 'www':
+                name += last_match
 
-    def ping(self):
+            name = name.rsplit('.', 1)
+            if name[0] == 'www':
+                name = name[-1]
+            else:
+                name = name[0]
+            self.name = name.upper()
+
+        self.deploy_config = get_config('deploy')
+
+        self.ping_results = PingResults()
+
+    def ping(self, timeout=1000):
         if self.ip:
-            r = pyping.Ping(self.ip, udp=udp).do()
-            self.pr.append(r)
+            r = pyping.Ping(
+                self.ip, timeout,
+                own_id=self.ping_own_id,
+                udp=not run_as_root,
+            ).do()
+            self.ping_results.append(r)
             return r
 
-    def score(self):
-        if self.pr.rtts():
-            return (1 + self.pr.lr() * 20)**2 \
-                * (self.pr.min() * 0.2 + self.pr.avg() * 0.8)
+    @property
+    def server(self):
+        return self.deploy_config['server'].format(
+            ip=self.ip,
+            host=self.host)
 
-    def test_result(self, short=True, score=True):
-        def fix(text=''):
-            if score:
-                s = self.score()
-                if s is None:
-                    s = ''
-                else:
-                    s = '={:.1f}'.format(s)
-                text += s
-            if short and text:
-                return '{}: {}'.format(self.short, text)
-            elif short and not text:
-                return self.short
+    @property
+    def ip(self):
+        if not self._ip:
+            try:
+                self._ip = gethostbyname(self.host)
+            except Exception:
+                log.warning(
+                    'Failed to resolve domain name: {}'.format(self.host))
             else:
-                return text
+                log.info('{0.host} => {0._ip}'.format(self))
+                return self._ip
+        return self._ip
 
-        if self.pr.rtts():
-            return fix('{:.1%}/{:.0f}/{:.0f}/{:.0f}'.format(
-                self.pr.lr(),
-                self.pr.min(),
-                self.pr.avg(),
-                self.pr.max()))
-        elif self.ip and not self.pr:
-            return fix()
-        else:
-            return fix('FAILED')
+    def resolve_host(self):
+        return self.ip
+
+    @property
+    def score(self):
+        if self.ping_results.rtts:
+            return (1 + self.ping_results.loss_rate * 20)**2 \
+                * (self.ping_results.min * 0.1 +
+                   self.ping_results.avg * 0.9)
+
+    @property
+    def available(self):
+        if self.ping_results:
+            return set(self.ping_results) != {None}
+
+    @property
+    def test_result(self):
+        if self.available:
+            # server/ip/host/loss_rate/min/avg/max/score
+            data = dict(
+                server=self.server,
+                ip=self.ip,
+                host=self.host,
+                loss_rate=self.ping_results.loss_rate,
+                min=self.ping_results.min,
+                avg=self.ping_results.avg,
+                max=self.ping_results.max,
+                score=self.score
+            )
+            return self.deploy_config['test_result'].format(**data)
+        elif self.available is False:
+            return 'NOT AVAILABLE'
 
 
 class Nodes(list):
@@ -105,82 +175,147 @@ class Nodes(list):
     def __add__(self, y):
         return Nodes(super(Nodes, self).__add__(y))
 
-    def test(self, config_section=None, auto_sort=True, **kwargs):
-        '''kwargs: option, value'''
+    def get_nodes(self, hosts, port, password, method):
+        method = method.lower()
 
+        i = 0
+        total = len(hosts)
+        for host in hosts:
+            i += 1
+            log.info('Got node "{}" ({}/{})'.format(host, i, total))
+            self.append(Node(host, port, password, method))
+
+    def resolve_hosts(self):
+        threads = list()
+        for node in self:
+            thread = threading.Thread(target=node.resolve_host, name=node.name)
+            thread.start()
+            threads.append(thread)
+        for thread in threads:
+            thread.join()
+
+    def test(self, config_section=None, sort=True, **config):
         if config_section is None:
             config_section = 'ping'
-        kwargs = kwargs or get_config(config_section)
+        if not config:
+            config = get_config(
+                config_section,
+                ints=[
+                    'count',
+                    'deadline',
+                    'max_sleep',
+                    'timeout',
+                    'max_retries'])
 
-        kwargs['option'] = kwargs['option'].lower()
-        kwargs['value'] = int(kwargs['value'])
-        start = datetime.datetime.now()
+        if not config['count'] or not config['deadline']:
+            log.info('Test skipped.')
+            return
 
-        if kwargs['option'] == 'time':
-            kwargs['value'] = datetime.timedelta(seconds=kwargs['value'])
+        self.resolve_hosts()
 
-        def waiting(doing):
-            global waiting_msg
-            waiting_msg = 'Testing ping ({}'.format(doing)
-            if kwargs['option'] == 'count':
-                r = kwargs['value'] - doing
-                if r < 0:
-                    return False
-                else:
-                    waiting_msg += '/{})...'.format(kwargs['value'])
-                    return True
-            elif kwargs['option'] == 'time':
-                r = kwargs['value'] - (datetime.datetime.now() - start)
-                if r < datetime.timedelta():
-                    return False
-                else:
-                    waiting_msg += '), {} remaining...'.format(
-                        str(r).split('.')[0])
-                    return True
-            elif kwargs['option'] == 'skip':
-                return False
-            elif kwargs['option'] == 'persistent':
-                waiting_msg += ')...'
-                return True
-            else:
-                raise Exception(
-                    'Unknown ping option: {}'.format(kwargs['option']))
-
-        try:
-            doing = 1
-            while waiting(doing):
-                log.info(waiting_msg)
-                while True:
-                    last_round = list()
-                    for node in self:
-                        last_round.append(node.ping())
-
-                    if set(last_round) == {None}:
-                        failing = True
-                        for node in reversed(self):
-                            del node.pr[-1]
-                            if failing and node.pr:
-                                if node.pr[-1] is None:
-                                    del node.pr[-1]
-                                else:
-                                    failing = False
-                        log.warning(
-                            'Failed to ping ({}), retrying...'.format(doing))
-                        time.sleep(1)
-                    else:
+        def do(node):
+            if not node.ip:
+                return
+            done = 0
+            while config['count'] < 0 or done < config['count']:
+                try:
+                    if terminated:
                         break
-                doing += 1
-        except KeyboardInterrupt:
-            log.warning('Test aborted.')
+                    r = node.ping(timeout=config['timeout'])
+                    if not r:
+                        r = 0
+                    if r < config['max_sleep']:
+                        time.sleep((config['max_sleep'] - r) / 1000.0)
+                    done += 1
 
-        if kwargs['option'] != 'skip':
-            if auto_sort:
-                self.sort(key=lambda n: n.score() or 99999999)
-            for node in self:
-                log.info('Result: {}'.format(node.test_result()))
+                    if done == config['max_retries']:
+                        if set(node.ping_results[
+                                -config['max_retries']:]) == {None}:
+                            log.warning('Failed to test {}'.format(node.name))
+                            break
+                except KeyboardInterrupt:
+                    break
 
-    def deploy(self, target, **kwargs):
-        return target(self, **kwargs)
+        threads = list()
+        terminated = False
+        for node in self:
+            thread = threading.Thread(target=do, args=(node,), name=node.name)
+            thread.start()
+            threads.append(thread)
+
+        start_time = default_timer()
+        log.info('Test started.')
+
+        round_a = 0
+        interval_a = 1
+        round_b = 0
+        interval_b = 1
+
+        while True:
+            try:
+                if not terminated:
+                    past_time = default_timer() - start_time
+                    if past_time // interval_a > round_a:
+                        line = list()
+                        for node in sorted(
+                                self.available_nodes(),
+                                key=self.sort_key):
+                            line.append([
+                                node.name,
+                                node.test_result,
+                                len(node.ping_results)])
+                        tab = tabulate(
+                            line,
+                            headers=['NAME', 'RESULT', 'COUNT'],
+                            tablefmt='simple')
+                        log.info('Preview:\n' + tab)
+                        round_a = past_time // interval_a
+
+                    if past_time // interval_b > round_b:
+                        log_msg = 'Testing {}/{} nodes'.format(
+                            len(threads),
+                            len(self))
+                        if config['deadline'] >= 0:
+                            log_msg += ', {} remaining...'.format(
+                                str(datetime.timedelta(seconds=round(
+                                    config['deadline'] - past_time
+                                ))).split('.')[0])
+                        else:
+                            log_msg += ', {} past...'.format(
+                                str(datetime.timedelta(seconds=round(
+                                    past_time
+                                ))).split('.')[0])
+                        log.info(log_msg)
+                        round_b = past_time // interval_b
+
+                    if config['deadline'] >= 0 and \
+                            past_time >= config['deadline']:
+                        terminated = True
+            except KeyboardInterrupt:
+                terminated = True
+
+            try:
+                threads = [t for t in threads if t.isAlive()]
+                if not threads:
+                    log.info('Test finished.')
+                    break
+                time.sleep(0.1)
+            except KeyboardInterrupt:
+                terminated = True
+                log.info('Test terminated.')
+
+        if sort:
+            self.sort(key=self.sort_key)
+
+    @staticmethod
+    def sort_key(node):
+        return node.score or 999999999999
+
+    def available_nodes(self):
+        return Nodes(n for n in self if n.available)
+
+    def deploy_to(self, target, **kwargs):
+        return target.deploy(self, **kwargs)
 
     def hosts(self):
         r = list()
@@ -189,49 +324,58 @@ class Nodes(list):
                 r.append('{}\t{}'.format(node.ip, node.host))
         return '\n'.join(r)
 
-    def dnsmasq(self, server=None):
-        r = list()
-        if server:
-            for node in self:
-                r.append('server=/{}/{}'.format(node.host, server))
-        else:
-            for node in self:
-                if node.ip:
-                    r.append('address=/{}/{}'.format(node.host, node.ip))
-        return '\n'.join(r)
 
-
-class PingResult(list):
+class PingResults(list):
 
     def __init__(self):
-        super(PingResult, self).__init__()
+        super(PingResults, self).__init__()
 
+    @property
     def rtts(self):
         return [r for r in self if r is not None]
 
+    @property
     def min(self):
         '''min rtt'''
-        if self.rtts():
-            return min(self.rtts())
+        if self.rtts:
+            return min(self.rtts)
 
+    @property
     def avg(self):
         '''average rtt'''
-        if self.rtts():
-            return sum(self.rtts()) / len(self.rtts())
+        if self.rtts:
+            return sum(self.rtts) / len(self.rtts)
 
+    @property
     def max(self):
         '''max rtt'''
-        if self.rtts():
-            return max(self.rtts())
+        if self.rtts:
+            return max(self.rtts)
 
-    def lr(self):
+    @property
+    def loss_rate(self):
         '''loss rate'''
         if self:
             return float(len([r for r in self if r is None])) / len(self)
 
 
-def get_config(section):
+def get_config(section, ints=[], floats=[], bools=[]):
     r = dict()
     for k, v in config.items(section):
         r[k] = v
+
+    for opt in ints:
+        r[opt] = int(r[opt])
+    for opt in floats:
+        r[opt] = float(r[opt])
+    for opt in bools:
+        r[opt] = bool(r[opt])
+
     return r
+
+
+def update_tlds():
+    url = 'http://data.iana.org/TLD/tlds-alpha-by-domain.txt'
+    r = requests.get(url)
+    with open(TLD_LIST_FILE, 'w') as fp:
+        fp.write(r.text)

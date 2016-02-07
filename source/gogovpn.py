@@ -2,77 +2,67 @@
 
 import re
 import requests
-from common import *
+from common import log, ConfigBased, Nodes
 
 
-def gogovpn(config_section=None, **kwargs):
-    '''kwargs: service, email, password'''
+class Gogovpn(ConfigBased):
+    def __init__(self, section=None, **config):
+        super(Gogovpn, self).__init__(section, **config)
+        self.session = requests.session()
+        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
 
-    if config_section is None:
-        config_section = 'gogovpn'
-    kwargs = kwargs or get_config(config_section)
+    def get_nodes(self):
+        base = 'http://www.gogovpn.org/{}/user'.format(self.config['service'])
+        url = dict(
+            login='{}/_login.php'.format(base),
+            ss_login='{}/index.php'.format(base),
+            ss_hosts='{}/node.php'.format(base))
 
-    base = 'http://www.gogovpn.org/{}/user'.format(kwargs['service'])
-    url = dict(
-        login='{}/_login.php'.format(base),
-        ss_login='{}/index.php'.format(base),
-        ss_hosts='{}/node.php'.format(base))
+        log.info('Logging in GOGOVPN as {}'.format(self.config['email']))
 
-    log.info('Logging in GOGOVPN as {}'.format(kwargs['email']))
+        r = self.session.post(url.get('login'), dict(
+            email=self.config['email'],
+            passwd=self.config['password'],
+            remember_me='on'))
 
-    session = requests.session()
-    session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        r.raise_for_status()
 
-    r = session.post(url.get('login'), dict(
-        email=kwargs['email'],
-        passwd=kwargs['password'],
-        remember_me='on'))
-
-    r.raise_for_status()
-
-    try:
-        r = r.json()
-    except:
-        raise Exception('Unknown error.')
-
-    if r.get('ok') != '1':
         try:
-            msg = r.get('msg').encode('utf8')
+            r = r.json()
         except:
-            msg = 'None.'
-        raise Exception('Failed to login: {}'.format(msg))
+            raise Exception('Unknown error.')
 
-    log.info('Getting SS login')
-    r = session.get(url.get('ss_login'))
-    r.raise_for_status()
+        if r.get('ok') != '1':
+            try:
+                msg = r.get('msg').encode()
+            except:
+                msg = 'None.'
+            raise Exception('Failed to login: {}'.format(msg))
 
-    try:
-        port = find_value('端口', '\d+', r.content)
-        password = find_value('密码', '\w+', r.content)
-        method = find_value('加密方式', '[\w\-]+', r.content)
-    except:
-        raise Exception('Your service may have been disabled.')
+        log.info('Getting SS login')
+        r = self.session.get(url.get('ss_login'))
+        r.raise_for_status()
 
-    log.info('Getting SS hosts')
-    r = session.get(url.get('ss_hosts'))
-    r.raise_for_status()
-    hosts = re.findall(
-        r'<b[^>]*>\s*(\w[\w\-]*\.gogovpn\.org)\s*</b>',
-        r.content)
+        try:
+            port = self.find_value('端口', '\d+', r.content)
+            password = self.find_value('密码', '\w+', r.content)
+            method = self.find_value('加密方式', '[\w\-]+', r.content)
+        except:
+            raise Exception('Your service may have been disabled.')
 
-    nodes = Nodes()
+        log.info('Getting SS hosts')
+        r = self.session.get(url.get('ss_hosts'))
+        r.raise_for_status()
+        hosts = re.findall(
+            r'<b[^>]*>\s*(\w[\w\-]*\.gogovpn\.org)\s*</b>',
+            r.content)
 
-    i = 0
-    all = len(hosts)
-    for host in hosts:
-        i += 1
-        log.info('Initializing {}... ({}/{})'.format(host, i, all))
-        nodes.append(Node(host, port, password, method))
+        nodes = Nodes()
+        nodes.get_nodes(hosts, port, password, method)
+        return nodes
 
-    return nodes
-
-
-def find_value(search, value_pattern, string):
-    rp = r'{s}\s*(?::|：)?\s*(?:<code>)?\s*(\b{vp})\s*<'.format(
-        s=search, vp=value_pattern)
-    return re.search(rp, string).group(1)
+    @staticmethod
+    def find_value(search, value_pattern, string):
+        rp = r'{s}\s*(?::|：)?\s*(?:<code>)?\s*(\b{vp})\s*<'.format(
+            s=search, vp=value_pattern)
+        return re.search(rp, string).group(1)

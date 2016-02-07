@@ -1,3 +1,4 @@
 # coding: utf8
 
-from gogovpn import gogovpn
+from cloudss import Cloudss
+from gogovpn import Gogovpn

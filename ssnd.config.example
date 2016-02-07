@@ -1,0 +1,53 @@
+[gogovpn]
+# 服务类型 (加速=ss; 精品=sspanel)
+service=
+# 邮箱
+email=
+# 密码
+password=
+
+[cloudss]
+# 邮箱
+email=
+# 密码
+password=
+
+[geewan]
+# 路由器地址, 一般为 geewan.lan
+hostname=geewan.lan
+# 密码
+password=
+# 超时, 一般为 600
+timeout=600
+
+[hiwifi]
+# 路由器地址, 一般为 192.168.199.1
+hostname=192.168.199.1
+# 用户名, 一般为 root
+username=root
+# 密码
+password=
+# 端口, 一般为 1022
+port=1022
+# SS插件配置路径, 一般为 /etc/config/ss-redir
+config_path=/etc/config/ss-redir
+
+[deploy]
+# 部署时的服务器地址选项，"{ip}"表示解析后的IP地址，"{host}"表示服务商提供的原节点地址
+server={ip}
+# 测试结果的输出格式，有以下字段可用
+# server/ip/host/loss_rate/min/avg/max/score
+test_result={loss_rate:.1%}/{min:.0F}/{avg:.0F}/{max:.0F}={score:.1F}
+
+[ping]
+# 连续发送Ping请求，直到达到设定的次数或时长
+# 次数，-1表示不限制
+count=-1
+# 时长(单位: 秒)，-1表示不限制
+deadline=30
+# 每个节点中每次Ping的最大间隔时间(单位: 毫秒)
+max_sleep=100
+# 每次Ping的超时(单位: 毫秒)
+timeout=1000
+# 每个节点的最大尝试数，超过该次数仍未Ping通，则不再尝试
+max_retries = 5
