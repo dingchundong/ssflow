@@ -1,14 +1,17 @@
 # coding: utf8
 
-from source import gogovpn
-from target import hiwifi
+
+import common
+from source import Cloudss
+from target import Hiwifi
 
 
 def deploy(source, target):
-    nodes = source()
+    nodes = source().get_nodes()
     nodes.test()
-    nodes.deploy(target)
+    nodes.deploy_to(target())
+    common.log.info('Done!')
 
 
 if __name__ == '__main__':
-    deploy(gogovpn, hiwifi)
+    deploy(Cloudss, Hiwifi)

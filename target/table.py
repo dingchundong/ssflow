@@ -1,38 +1,36 @@
 # coding: utf8
 
 from tabulate import tabulate
+# from common import log
 
 
-def table(nodes, tablefmt='simple'):
+class Table(object):
+    def __init__(self, tablefmt='simple'):
+        self.tablefmt = tablefmt
 
-    l = list()
-    i = 0
-    for n in nodes:
-        score = n.score()
-        if score is None:
-            score = ''
-        else:
-            score = '{:.1f}'.format(n.score())
+    def deploy(self, nodes):
+        l = list()
+        i = 0
+        for n in nodes:
+            i += 1
+            l.append([
+                i,
+                n.name,
+                n.test_result,
+                len(n.ping_results),
+                n.server,
+                n.port,
+                n.password,
+                n.method])
 
-        i += 1
-        l.append([
-            i,
-            n.short,
-            n.test_result(short=False, score=False),
-            score,
-            n.ip_or_host(),
-            n.port,
-            n.password,
-            n.method])
-
-    return tabulate(
-        l, headers=[
-            'INDEX',
-            'NAME',
-            'LOSS/MIN/AVG/MAX',
-            'SCORE',
-            'HOST',
-            'PORT',
-            'PASSWORD',
-            'METHOD'
-        ], tablefmt=tablefmt)
+        print(tabulate(
+            l, headers=[
+                '#',
+                'NAME',
+                'RESULT',
+                'COUNT',
+                'SERVER',
+                'PORT',
+                'PASSWORD',
+                'METHOD'
+            ], tablefmt=self.tablefmt))
