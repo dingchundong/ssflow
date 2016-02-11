@@ -1,4 +1,4 @@
-# 一键获取并部署 Shadowsocks 节点
+# 一键完成 Shadowsocks 的节点获取、测速和使用
 
 ### 痛点
 
@@ -37,12 +37,12 @@
 
 3. 编写 `main.py` ，从 `source` 导入 Shadowsocks 节点**来源**，并从 `target` 导入部署**目标**，例如：
 
-		from source import cloudss
-		from target import hiwifi
+		from sources import CloudSS
+		from targets import HiWiFi
 
 5. 使用 `deploy(source, target)` 函数进行部署
 
-		deploy(cloudss, hiwifi)
+		deploy(CloudSS, HiWiFi)
 		
 	或亲自编写代码来实现自定义需求
 
@@ -52,18 +52,20 @@
 
 ## 当前支持
 
-> 截止目前，仅支持两个来源和三个目标，因为这些是自己在用或用过的，而非变相推广  
+> 截止目前，仅支持以下**来源**和**目标**，因为这些是自己在用或用过的，而非变相推广  
 > 所以一起完善吧，让它支持更多来源和目标
 
 当前支持的 **来源**
 
 * cloudss.net
 * gogovpn.org
+* ishadowsocks.com
 
 当前支持的 **目标**
 
 * 安装有SS插件的极路由 (插件安装 http://ss.gogovpn.org/ss.sh)
 * 极玩路由器，或安装有极玩固件的的其他路由器 (详见 http://www.geewan.com)
+* shadowsocks-libev，目前仅支持 OS X 平台
 * 以纯文本表格的方式输出节点信息
 
 ## 一起完善
