@@ -6,10 +6,10 @@ import requests
 from common import log, ConfigBased
 
 
-class Geewan(ConfigBased):
+class GeeWan(ConfigBased):
 
     def __init__(self, section=None, **config):
-        super(Geewan, self).__init__(section, ints=['timeout'], **config)
+        super(GeeWan, self).__init__(section, ints=['timeout'], **config)
 
         log.info('Logging in Geewan router...')
 

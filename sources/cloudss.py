@@ -2,12 +2,12 @@
 
 import re
 import requests
-from common import Nodes, ConfigBased
+from common import log, Nodes, ConfigBased
 
 
-class Cloudss(ConfigBased):
+class CloudSS(ConfigBased):
     def __init__(self, section=None, **config):
-        super(Cloudss, self).__init__(section, **config)
+        super(CloudSS, self).__init__(section, **config)
         self.session = requests.session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
         self.url_base = 'http://www.cloudss.net'
@@ -24,7 +24,7 @@ class Cloudss(ConfigBased):
         r = self.session.get(self.url_products)
         r.raise_for_status()
         m = re.search(
-            r'name="token"[^<>]+?value="([\da-f]{40})"', r.text, re.I)
+            r'name="token"[^<>]+?value="([\da-f]{40})"', r.content, re.I)
         self.token = m.group(1)
 
         r = self.session.post(
@@ -39,11 +39,12 @@ class Cloudss(ConfigBased):
 
         m = re.search(
             re.escape('href="' + '/clientarea.php?action=productdetails') +
-            r'\b[^"<>]+?\bid=(\d+)"', r.text, re.I)
+            r'\b[^"<>]+?\bid=(\d+)"', r.content, re.I)
 
         return m.groups()
 
     def get_nodes(self):
+        log.info('Getting nodes from CloudSS...')
         url = self.url_product_details + self.product_ids[0]
         r = self.session.get(url)
         r.raise_for_status()

@@ -2,8 +2,8 @@
 
 
 import common
-from source import Cloudss
-from target import Hiwifi
+from sources import CloudSS
+from targets import HiWiFi
 
 
 def deploy(source, target):
@@ -14,4 +14,4 @@ def deploy(source, target):
 
 
 if __name__ == '__main__':
-    deploy(Cloudss, Hiwifi)
+    deploy(CloudSS, HiWiFi)

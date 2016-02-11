@@ -5,9 +5,9 @@ import requests
 from common import log, ConfigBased, Nodes
 
 
-class Gogovpn(ConfigBased):
+class GoGoVPN(ConfigBased):
     def __init__(self, section=None, **config):
-        super(Gogovpn, self).__init__(section, **config)
+        super(GoGoVPN, self).__init__(section, **config)
         self.session = requests.session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
 
