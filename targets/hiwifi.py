@@ -5,10 +5,10 @@ import paramiko
 from common import log, ConfigBased
 
 
-class Hiwifi(ConfigBased):
+class HiWiFi(ConfigBased):
 
     def __init__(self, section=None, **config):
-        super(Hiwifi, self).__init__(section, ints=['port'], **config)
+        super(HiWiFi, self).__init__(section, ints=['port'], **config)
 
         log.info('ssh {0[username]}@{0[hostname]} -p {0[port]}'.format(
             self.config))

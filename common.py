@@ -16,8 +16,9 @@ from tabulate import tabulate
 from socket import gethostbyname
 from ConfigParser import ConfigParser
 
-CONFIG_FILE = 'ssnd.config'
-TLD_LIST_FILE = 'tld_list.txt'
+BASE_DIR = os.path.split(os.path.realpath(__file__))[0]
+CONFIG_FILE = os.path.join(BASE_DIR, 'ssflow.config')
+TLD_LIST_FILE = os.path.join(BASE_DIR, 'tld_list.txt')
 
 if not os.path.isfile(CONFIG_FILE):
     raise Exception('Config file not found: {}'.format(CONFIG_FILE))
@@ -257,9 +258,7 @@ class Nodes(list):
                     past_time = default_timer() - start_time
                     if past_time // interval_a > round_a:
                         line = list()
-                        for node in sorted(
-                                self.available_nodes(),
-                                key=self.sort_key):
+                        for node in sorted(self, key=self.sort_key)[:10]:
                             line.append([
                                 node.name,
                                 node.test_result,
@@ -268,7 +267,7 @@ class Nodes(list):
                             line,
                             headers=['NAME', 'RESULT', 'COUNT'],
                             tablefmt='simple')
-                        log.info('Preview:\n' + tab)
+                        log.info('Top 10 nodes:\n' + tab)
                         round_a = past_time // interval_a
 
                     if past_time // interval_b > round_b:
@@ -313,6 +312,10 @@ class Nodes(list):
 
     def available_nodes(self):
         return Nodes(n for n in self if n.available)
+
+    def select(self, regex_pattern):
+        return Nodes(n for n in self if re.search(
+            regex_pattern, n.name, re.I))
 
     def deploy_to(self, target, **kwargs):
         return target.deploy(self, **kwargs)

@@ -1,12 +1,12 @@
-[gogovpn]
-# 服务类型 (加速=ss; 精品=sspanel)
-service=
+[cloudss]
 # 邮箱
 email=
 # 密码
 password=
 
-[cloudss]
+[gogovpn]
+# 服务类型 (加速=ss; 精品=sspanel)
+service=
 # 邮箱
 email=
 # 密码
@@ -20,6 +20,14 @@ password=
 # 超时, 一般为 600
 timeout=600
 
+[shadowsocks_libev_osx]
+# ss-local 的路径
+ss_local_path=ss-local
+# PAC 文件的路径，用于 "auto" 模式
+pac_path=
+# 附加的 ss-local 运行参数，一般留空即可
+ext_args=
+
 [hiwifi]
 # 路由器地址, 一般为 192.168.199.1
 hostname=192.168.199.1
@@ -31,13 +39,6 @@ password=
 port=1022
 # SS插件配置路径, 一般为 /etc/config/ss-redir
 config_path=/etc/config/ss-redir
-
-[deploy]
-# 部署时的服务器地址选项，"{ip}"表示解析后的IP地址，"{host}"表示服务商提供的原节点地址
-server={ip}
-# 测试结果的输出格式，有以下字段可用
-# server/ip/host/loss_rate/min/avg/max/score
-test_result={loss_rate:.1%}/{min:.0F}/{avg:.0F}/{max:.0F}={score:.1F}
 
 [ping]
 # 连续发送Ping请求，直到达到设定的次数或时长
@@ -51,3 +52,10 @@ max_sleep=100
 timeout=1000
 # 每个节点的最大尝试数，超过该次数仍未Ping通，则不再尝试
 max_retries = 5
+
+[deploy]
+# 部署时的服务器地址选项，"{ip}"表示解析后的IP地址，"{host}"表示服务商提供的原节点地址
+server={ip}
+# 测试结果的输出格式，有以下字段可用
+# server/ip/host/loss_rate/min/avg/max/score
+test_result={loss_rate:.1%}/{min:.0F}/{avg:.0F}/{max:.0F}={score:.1F}
