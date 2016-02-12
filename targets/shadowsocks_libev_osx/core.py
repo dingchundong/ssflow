@@ -47,21 +47,18 @@ class Shadowsocks_libev_OSX(ConfigBased):
         if pipe.wait():
             raise Exception('Failed to install proxy helper.')
 
-    def deploy(self, node, mode='auto'):
-        '''mode: auto/global'''
-        if mode not in ('auto', 'global'):
-            raise ValueError('mode: auto/global')
+    def deploy(self, node, global_proxy=False):
         if isinstance(node, Nodes):
             node = node[0]
         log.info('Using: {0.name}: {0.test_result}'.format(node))
         self.run_ss_local(node)
 
-        if mode == 'auto':
+        if global_proxy:
+            self.set_sys_proxy('global')
+        else:
             self.pac_server = PACServer(self.config['pac_path'])
             self.pac_server.start()
             self.set_sys_proxy('auto')
-        elif mode == 'global':
-            self.set_sys_proxy('global')
 
         try:
             self.ss_client_pipe.wait()

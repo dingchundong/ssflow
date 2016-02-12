@@ -37,7 +37,7 @@ class GeeWan(ConfigBased):
         self.delete_ss_nodes()
         self.deploy_new_nodes(nodes)
         self.set_node(self.first_ss_node)
-        self.router.open_web_admin()
+        self.open_web_admin()
 
     def deploy_new_nodes(self, nodes):
         for n in nodes:
