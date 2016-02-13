@@ -3,4 +3,4 @@ ssflow.config
 
 *.pyc
 
-test.py
+p_*
