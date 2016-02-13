@@ -30,14 +30,16 @@ class GeeWan(ConfigBased):
             s=self.stok,
             i=interface)
 
-    def deploy(self, nodes):
+    def deploy(self, nodes, set_node=True, open_web_admin=False):
         '''Warning: All old ss nodes in the router will be deleted'''
         '''警告: 部署时将删除路由器中所有旧SS节点'''
 
         self.delete_ss_nodes()
         self.deploy_new_nodes(nodes)
-        self.set_node(self.first_ss_node)
-        self.open_web_admin()
+        if set_node:
+            self.set_node(self.first_ss_node)
+        if open_web_admin:
+            self.open_web_admin()
 
     def deploy_new_nodes(self, nodes):
         for n in nodes:
